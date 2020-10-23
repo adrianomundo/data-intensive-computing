@@ -1,2 +1,14 @@
 *.class
 *.log
+.ipynb_checkpoints
+
+*.iml
+*.ipr
+*.iws
+.idea
+out
+
+target
+*.class
+
+.DS_Store
