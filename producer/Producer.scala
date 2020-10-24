@@ -4,7 +4,7 @@ import java.util.Properties
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 
 object Producer extends App {
-  val path: String = "/home/fonzie/IdeaProjects/SBTPScalaProjectV2/src/main/scala/Producer/creditcard.csv"
+  val path: String = "/home/fonzie/IdeaProjects/SBTPScalaProjectV2/src/main/scala/Producer/producer_input.csv"
   val topic: String = "credit-transactions"
   var i: Int = 0
   val brokers: String = "localhost:9092"
@@ -22,7 +22,7 @@ object Producer extends App {
       i += 1
       producer.send(data)
       println(data)
-      try Thread.sleep(1000)
+      try Thread.sleep(500)
       catch {
         case e: Exception =>
           e.printStackTrace()
