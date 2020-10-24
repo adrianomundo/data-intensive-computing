@@ -1,34 +1,15 @@
-import java.util.HashMap
-
-import org.apache.kafka.clients.consumer.ConsumerConfig
-import org.apache.kafka.common.serialization.StringDeserializer
-import org.apache.spark.streaming.kafka._
-import kafka.serializer.{DefaultDecoder, StringDecoder}
-import org.apache.spark.SparkConf
-import org.apache.spark.SparkContext
-import org.apache.spark.streaming._
-import org.apache.spark.streaming.kafka._
-import org.apache.spark.storage.StorageLevel
-import java.util.{Date, Properties}
-
-import org.apache.spark.ml
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
-
-import scala.util.Random
-import com.datastax.spark.connector._
-import com.datastax.driver.core.{Cluster, Host, Metadata, Session}
-import com.datastax.spark.connector.streaming._
+import kafka.serializer.StringDecoder
+import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.ml.PipelineModel
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.types.{DataType, DoubleType, StructField, StructType}
-import org.dmg.pmml.True
-
-import scala.util.parsing.json._
-import scala.collection.mutable
-import scala.util.parsing.json.JSON.elem
+import org.apache.spark.sql.types.{DoubleType, StructField, StructType}
+import org.apache.spark.streaming._
+import org.apache.spark.streaming.kafka._
 
 object Consumer {
   def main(args: Array[String]) {
+
+    /*            SPARK CONTEXT           */
 
     val conf = new SparkConf().setAppName("csv").setMaster("local[2]")
     val sc = SparkContext.getOrCreate(conf)
@@ -36,32 +17,6 @@ object Consumer {
 
     val spark = org.apache.spark.sql.SparkSession.builder.master("local").appName("MyApp").getOrCreate()
     ssc.checkpoint("./checkpoint")
-
-    val kafkaConf = Map(
-      "metadata.broker.list" -> "localhost:9092",
-      "zookeeper.connect" -> "localhost:2181",
-      "group.id" -> "kafka-spark-streaming",
-      "zookeeper.connection.timeout.ms" -> "1000")
-
-    val topicSet = Set("credit-transactions")
-    val messages = KafkaUtils.createDirectStream[String, String, StringDecoder, StringDecoder](ssc, kafkaConf, topicSet)
-
-    val values = messages.map(message => {
-      val myDataFirst = message._2.split(",")
-      val myData = myDataFirst.map(_.toDouble)
-      println("TIME: " + myData(0) + " - tipo: " + myData(0).getClass)
-      println("ALTRE COSE: " + myData(1) + " - tipo: " + myData(1).getClass)
-      println("AMOUNT: " + myData(29) + " - tipo: " + myData(29).getClass)
-      println("CLASS: " + myData(30) + " - tipo: " + myData(30).getClass)
-      myData
-    })
-
-    values.print()
-
-    val modelPath = "/home/fonzie/IdeaProjects/SBTPScalaProjectV2/src/main/scala/Consumer"
-    val model = PipelineModel.read.load(modelPath)
-
-    import spark.implicits._
 
     val mySchema = StructType(Seq(
       StructField("Time", DoubleType, true),
@@ -97,6 +52,60 @@ object Consumer {
       StructField("Class", DoubleType, true)
     ))
 
+    /*         END OF SPARK CONTEXT        */
+    /*            KAFKA CONSUMER           */
+
+    val kafkaConf = Map(
+      "metadata.broker.list" -> "localhost:9092",
+      "zookeeper.connect" -> "localhost:2181",
+      "group.id" -> "kafka-spark-streaming",
+      "zookeeper.connection.timeout.ms" -> "1000")
+
+    val topicSet = Set("credit-transactions")
+    val messages = KafkaUtils.createDirectStream[String, String, StringDecoder, StringDecoder](ssc, kafkaConf, topicSet)
+
+    /*         END OF KAFKA CONSUMER        */
+    /*         CASSANDRA CONNECTION         */
+    /*
+
+// Cassandra initialization
+val cluster = Cluster.builder().addContactPoint("127.0.0.1").build()
+val session = cluster.connect()
+
+session.execute("CREATE KEYSPACE IF NOT EXISTS credit WITH REPLICATION = {'class' : 'SimpleStrategy', 'replication_factor': 1};")
+session.execute("CREATE TABLE IF NOT EXISTS credit.transactionscazzi (time int PRIMARY KEY, amount int);")
+session.close()
+
+def cleanTransaction(transaction: Array[String]): Array[Int] = {
+  // keep only: 0-> transaction time; 29->transaction amount; 30->class (fraudulent or not)
+  //TO BE READDED Array(transaction(0).toInt, transaction(29).toInt, transaction(30).toInt)
+  Array(transaction(0).toInt, transaction(29).toInt)
+}
+
+val usefulData = values.map(pair => cleanTransaction(pair))
+// TO BE READDED usefulData.saveToCassandra("credit", "transactions", SomeColumns("time", "amount", "class"))
+//usefulData.saveToCassandra("credit", "transactionscazzi", SomeColumns("time", "amount"))
+usefulData.write.mode("overwrite").cassandraFormat("transactionscazzi", "credit").save()
+
+ */
+    /*      END OF CASSANDRA CONNECTION     */
+    /*           STREAM PROCESSING          */
+
+    val values = messages.map(message => {
+      val myDataFirst = message._2.split(",")
+      val myData = myDataFirst.map(_.toDouble)
+      println("TIME: " + myData(0) + " - tipo: " + myData(0).getClass)
+      println("ALTRE COSE: " + myData(1) + " - tipo: " + myData(1).getClass)
+      println("AMOUNT: " + myData(29) + " - tipo: " + myData(29).getClass)
+      println("CLASS: " + myData(30) + " - tipo: " + myData(30).getClass)
+      myData
+    })
+
+    values.print()
+
+    val modelPath = "/home/fonzie/IdeaProjects/SBTPScalaProjectV2/src/main/scala/Consumer"
+    val model = PipelineModel.read.load(modelPath)
+
     values.foreachRDD(rdd => {
       if (!rdd.isEmpty()) {
         val rowRDD = rdd.map(a => Row.fromSeq(a))
@@ -111,32 +120,9 @@ object Consumer {
         println("POSTPREDICTION")
       }
     })
-    
-    /*
-
-    // Cassandra initialization
-    val cluster = Cluster.builder().addContactPoint("127.0.0.1").build()
-    val session = cluster.connect()
-
-    session.execute("CREATE KEYSPACE IF NOT EXISTS credit WITH REPLICATION = {'class' : 'SimpleStrategy', 'replication_factor': 1};")
-    session.execute("CREATE TABLE IF NOT EXISTS credit.transactionscazzi (time int PRIMARY KEY, amount int);")
-    session.close()
-
-    def cleanTransaction(transaction: Array[String]): Array[Int] = {
-      // keep only: 0-> transaction time; 29->transaction amount; 30->class (fraudulent or not)
-      //TO BE READDED Array(transaction(0).toInt, transaction(29).toInt, transaction(30).toInt)
-      Array(transaction(0).toInt, transaction(29).toInt)
-    }
-
-    val usefulData = values.map(pair => cleanTransaction(pair))
-    // TO BE READDED usefulData.saveToCassandra("credit", "transactions", SomeColumns("time", "amount", "class"))
-    //usefulData.saveToCassandra("credit", "transactionscazzi", SomeColumns("time", "amount"))
-    usefulData.write.mode("overwrite").cassandraFormat("transactionscazzi", "credit").save()
-
-     */
-
 
     ssc.start()
     ssc.awaitTermination()
   }
+
 }
