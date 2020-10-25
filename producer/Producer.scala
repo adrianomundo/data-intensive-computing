@@ -8,13 +8,13 @@ object Producer extends App {
   val topic: String = "credit-transactions"
   var i: Int = 0
   val brokers: String = "localhost:9092"
-  val bufferedReader: BufferedReader = loadStreamInJava(path)
+  val bufferedReader: BufferedReader = loadStream(path)
 
-  def loadStreamInJava(pathToCSV: String): BufferedReader = {
+  def loadStream(pathToCSV: String): BufferedReader = {
     new BufferedReader(new FileReader(pathToCSV))
   }
 
-  def sendAllDataInJava(): Unit = {
+  def sendAllData(): Unit = {
     var line = ""
     while ( {line = bufferedReader.readLine(); line != null}) {
 
@@ -37,7 +37,7 @@ object Producer extends App {
   props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer")
   val producer = new KafkaProducer[String, String](props)
 
-  sendAllDataInJava()
+  sendAllData()
 
   producer.close()
 }
