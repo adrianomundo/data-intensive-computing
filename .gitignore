@@ -9,6 +9,11 @@
 out
 
 target
+project
+spark-warehouse
+keckpoints
 *.class
+LRModelSpark
+*.csv
 
 .DS_Store

@@ -72,7 +72,7 @@ object Consumer {
       myData
     })
 
-    val modelPath = "./LRModelSpark2"
+    val modelPath = "./LRModelSpark"
     val model = LogisticRegressionModel.load(modelPath)
 
     values.foreachRDD(rdd => {
